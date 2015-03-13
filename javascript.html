@@ -1,0 +1,389 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+
+<script>
+
+  var gs = google.script.run, // Server function access
+
+    // Sketchfab API
+    sketchfabApiUrl = 'https://api.sketchfab.com/v2/models',
+    sketchfabModelUrl = 'https://sketchfab.com/models/',
+    token = '', // Keep it secret. Keep it safe.
+  
+    // Spreadsheet and model data organization
+    headers = [ 'file', 'name', 'description', 'tags', 'private', 'password', 'license', 'category' ],
+    columnCount = headers.length,
+    modelFiles,
+    modelCount,
+    rowCount,
+    modelsArr,
+    modelsPatchArr = [],
+    lics = [ 
+      {
+        'uid': 1,
+        'slug': 'CC Attribution'
+      },
+
+      {
+        'uid': 2,
+        'slug': 'CC Attribution-ShareAlike'
+      },
+
+      {
+        'uid': 3,
+        'slug': 'CC Attribution-NoDerivs'
+      },
+
+      {
+        'uid': 4,
+        'slug': 'CC Attribution-NonCommercial'
+      },
+
+      {
+        'uid': 5,
+        'slug': 'CC Attribution-NonCommercial-ShareAlike'
+      },
+
+      {
+        'uid': 6,
+        'slug': 'CC Attribution-NonCommercial-NoDerivs'
+      },
+
+      {
+        'uid': 7,
+        'slug': 'CC0 Public Domain'
+      }
+    ],
+    cats,
+
+    // Form DOM object
+    formData = $( '#the-form' )[ 0 ],
+
+    // Upload data
+    uploadIndex = 0,
+    dataArr = [],
+
+    // Buttons
+    uploadButton = $( '#upload' ),
+    clearButton = $( '#clear' ),
+    fileInput =  $( '#modelFiles' );
+
+  // Button event handling
+  uploadButton.on( 'click', function() {
+    console.log( 'Upload button was clicked' );
+    gs.withSuccessHandler( prepareUpload )
+      .getMetaData();
+  });
+
+  clearButton.on( 'click', function() {
+    console.log( 'Clear button was clicked' );
+    uploadIndex = 0;
+    $( '#status, #fileCount' ).empty();
+    $( '#token, #modelFiles' ).val( '' );
+    gs.withSuccessHandler( sheetCleared )
+      .clearSheet();
+  });
+  
+  fileInput.on( 'change', function() {
+    var fileCount = this.files.length,
+      fileText = ' files';
+
+    if ( fileCount === 1 ) {
+      fileText = ' file';
+    }
+
+    $( '#fileCount' ).empty()
+      .append( '<span>' + fileCount + fileText + '</span>' );
+  });
+
+  formData.onsubmit = function() {
+    
+    // API token
+    token = formData[ 'token' ].value;
+    console.log( 'API Token: ' + token );
+    
+    // Populate model list
+    modelFiles = formData[ 'modelFiles' ].files;
+    modelCount = modelFiles.length;
+    console.log( 'Model count: ' + modelCount );
+    
+    rowCount = modelCount + 1;
+    
+    // An array of empty strings for empty cells
+    var blanks = [];
+    for ( var i = 0; i < columnCount - 1; i++ ) {
+      blanks.push( '' );
+    }
+
+    // 2D array for sheet formatting
+    modelsArr = [ headers ];
+    
+    for ( var i = 0; i < modelCount; i++ ) {
+      
+      // Get model filename and add blank cells to row
+      var fileName = [ modelFiles[ i ].name ],
+        modelArr = fileName.concat( blanks );
+      
+      console.log( fileName );
+
+      // Prepare DOM for status polling
+      $( '#status' ).append( '<p class="file-name">' + fileName + '</p><p class="file-status" id="model' + ( i + 1 ) + '">Waiting...</p>' );
+
+      // Add this row to 2D array
+      modelsArr.push( modelArr );
+    }
+    
+    // Fill in sheet
+    gs.withSuccessHandler( getCategories )
+      .populateSheet( modelsArr, rowCount, columnCount );
+    
+    // Prevent redirect
+    return false;
+  };
+
+  function getCategories( categories ) {
+    cats = categories;
+    console.log( 'Got categories.' );
+  }
+
+  function sheetCleared() {
+    console.log( 'The sheet and form were cleared, status list emptied, and global variables reset.' );
+  }
+  
+  function prepareUpload( metadata ) {
+    console.log( metadata );
+
+    // Spreadsheet cells have 1-based index
+    for ( var row = 1; row <= modelCount; row++ ) {
+      
+      // Model objects
+      var modelData = {
+        'modelFile' : modelFiles[ row - 1 ],
+        'token' : token,
+        'source' : 'google-spreadsheet'
+      },
+        modelFormData = new FormData();
+      
+      // Add model metadata to model data object
+      for ( var col = 1; col <= columnCount; col++ ) {
+        modelData[ headers[ col ] ] = metadata[ row ][ col ];
+      }
+
+      // Validate metadata
+      if ( modelData.private !== 1 ) {
+        modelData.private = '';
+        console.log( 'Model ' + row + ' of ' + modelCount + ' is public.' );
+      }
+
+      if ( modelData.name.length > 48 ) {
+        console.log( 'Model name "' + modelData.name + '" is longer than 48 characters.' );
+        modelData.name = modelData.name.substring( 0, 47 );
+        console.log( 'It has been shortened to "' + modelData.name + '"' );
+      }
+
+      if ( modelData.description.length > 256 ) {
+        console.log( 'Model description "' + modelData.description + '" is longer than 256 characters.' );
+        modelData.description = modelData.description.substring( 0, 255 );
+        console.log( 'It has been shortened to "' + modelData.description + '"' );
+      }
+
+      if ( modelData.password.length > 64 ) {
+        console.log( 'Model password "' + modelData.password + '" is longer than 64 characters. It has been removed.' );
+        modelData.password = '';
+      }
+
+      if (modelData.license !== '' ) {
+        console.log( 'Converting license slug to uid.' );
+        for ( var lic = 0; lic < lics.length; lic++ ) {
+          if ( modelData.license === lics[ lic ].slug ) {
+            modelData.license = lics[ lic ].uid;
+            break;
+          }
+        }
+      }
+
+      if ( modelData.category !== '' ) {
+        console.log( 'Converting category slug to uid.' );
+        for ( var cat = 0; cat < cats.length; cat ++ ) {
+          if ( modelData.category === cats[ cat ].slug ) {
+            modelData.category = [ cats[ cat ].uid ];
+            break;
+          }
+        }
+      }
+      
+      modelsPatchArr.push( {
+        'categories': modelData.category
+      });
+
+      console.log( 'Metadata validation ' + row + ' of ' + modelCount + ' complete.' );
+
+      // Add model data object properties to model FormData      
+      for ( var prop in modelData ) {
+        if ( modelData.hasOwnProperty( prop ) ) {
+          modelFormData.append( prop, modelData[ prop ] );
+        }
+      }
+      
+      // Add FormData object to array
+      dataArr.push( modelFormData );
+    }
+
+    // Upload the first model
+    uploadModel( dataArr[ uploadIndex ] );
+  }
+
+  function uploadModel( data ) {
+    console.log( 'Begin upload ' + ( uploadIndex + 1 ) + ' of ' + modelCount );
+    
+    $( '#model' + ( uploadIndex + 1 ) ).html( 'Uploading...' );
+    
+    $.ajax({
+      url: sketchfabApiUrl,
+      data: data,
+      cache: false,
+      contentType: false,
+      processData: false,
+      type: 'POST',
+
+      success: function( response ) {
+        var uid = response.uid;
+        console.log( 'Upload ' + ( uploadIndex + 1 ) + ' of ' + modelCount + ' successful.');
+        console.log( 'Begin polling processing status. If successful, the model will be available at ' + sketchfabModelUrl + uid );
+        $( '#model' + ( uploadIndex + 1 ) ).html( 'Upload successful. Begin polling...' );
+        pollProcessingStatus( uid, uploadIndex );
+        if ( uploadIndex < modelCount - 1 ) {
+          uploadIndex++;
+          uploadModel( dataArr[ uploadIndex ] );
+        } else {
+          uploadIndex = 0;
+        }
+      },
+
+      error: function( response ) {
+        console.log( 'Upload Error!' );
+        console.log( JSON.stringify( response ) );
+        $( '#model' + ( uploadIndex + 1 ) ).html( 'Upload error!' );
+      }
+    });
+  }
+
+  function pollProcessingStatus( urlid, pollingIndex ) {
+    
+    var url = sketchfabApiUrl + '/' + urlid + '/status?token=' + token,
+      errors = 0,
+      maxErrors = 10,
+      retry = 0,
+      maxRetries = 50,
+      retryTimeout = 5000,
+      retryTimeoutSec = retryTimeout / 1000, // seconds
+      
+      complete = false;
+
+    function getStatus() {
+      $.ajax({
+        url: url,
+        type: 'GET',
+        dataType: 'json',
+
+        success: function( response ) {
+          retry++;
+
+          console.log( 'Got status ' + ( pollingIndex + 1 ) + ' of ' + modelCount + '...' );
+          var status = response.processing;
+          
+          switch( status ) {
+
+            case 'PENDING':
+              console.log( 'Model is in the processing queue. Waiting ' + ( retryTimeoutSec ) + ' seconds to try again...' );
+              $( '#model' + ( pollingIndex + 1 ) ).html( 'Model in queue...' );
+              break;
+
+            case 'PROCESSING':
+              console.log( 'Model is being processed. Waiting ' + ( retryTimeoutSec ) + ' seconds to try again...' );
+              $( '#model' + ( pollingIndex + 1 ) ).html( 'Model processing...' );
+              break;
+
+            case 'FAILED':
+              console.log( 'Model processing failed:' );
+              console.log( response.error );
+              $( '#model' + ( pollingIndex + 1 ) ).html( 'Model processing failed!' );
+              complete = true;
+              break;
+
+            case 'SUCCEEDED':
+              console.log( 'It worked!' );
+              console.log( sketchfabModelUrl + urlid );
+              complete = true;
+              $( '#model' + ( pollingIndex + 1 ) ).html( '<a target="_blank" href="' + sketchfabModelUrl + urlid + '">' + sketchfabModelUrl + urlid + '</a>' );
+              console.log( 'Preparing to patch category...' );
+              patchModel( urlid, pollingIndex );
+              break;
+
+            default:
+              console.log( 'This message should never appear...something changed in the processing response. See: ' + url );
+              // complete = true;
+              // $( '#status' ).html( 'Something changed. See: ' + url );
+          }
+          
+          if ( retry < maxRetries && !complete ) {
+            setTimeout( getStatus, retryTimeout );
+          } else if ( complete ) {
+            return;
+          } else if ( retry >= maxRetries ) {
+            console.log( 'Polled ' + maxRetries + ' times and it\'s still not finished...quitting' );
+            $( '#model' + ( pollingIndex + 1 ) ).html( 'Polled ' + maxRetries + ' times and it\'s still not finished...quitting' );
+          } else {
+            console.log( 'Something weird happened...quitting' );
+            $( '#model' + ( pollingIndex + 1 ) ).html( 'Something weird happened...quitting' );
+          }
+        },
+
+        error: function( response ) {
+          errors++;
+          retry++;
+
+          if ( errors < maxErrors && retry < maxRetries && !complete ) {
+            console.log( 'Error: ' + JSON.stringify( response ) );
+            console.log( 'Error getting status ( ' + errors + ' ). Trying again...' );
+            $( '#model' + ( pollingIndex + 1 ) ).html( 'Error getting status ( ' + errors + ' ). Trying again...' );
+            setTimeout( getStatus, retryTimeout );
+          } else {
+            console.log( 'Too many errors...quitting' );
+            $( '#model' + ( pollingIndex + 1 ) ).html( 'Too many errors...quitting' );
+          }
+        }
+      });
+    }
+
+    getStatus();
+  }
+
+  function patchModel( urlid, patchingIndex ) {
+    var patchUrl = 'https://api.sketchfab.com/v2/models/' + urlid + '?token=' + token,
+      patchData = modelsPatchArr[ patchingIndex ];
+
+    if ( patchData.category === '' ) {
+      console.log( 'Model ' + ( patchingIndex + 1 ) + ' of ' + modelCount + ' has no category, skipping.' );
+    } else {
+      console.log( 'Patching category for model ' + ( patchingIndex + 1 ) + ' of ' + modelCount + '...' );
+      
+      $.ajax({
+        headers : {
+          'Content-Type' : 'application/json'
+        },
+        url: patchUrl,
+        data: patchData,
+        type: 'PATCH',
+
+        success: function( response ) {
+          console.log( 'Patched.' );
+        },
+
+        error: function( response ) {
+          console.log( 'Patch Failed!' );
+        }
+      });
+    }
+  }
+
+</script>

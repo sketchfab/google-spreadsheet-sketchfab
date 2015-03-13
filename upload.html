@@ -1,0 +1,23 @@
+<form id="the-form" action="https://api.sketchfab.com/v2/models" enctype="multipart/form-data">
+  
+  <div id="fileUpload">
+    <span>Choose Files</span>
+    <input id="modelFiles" name="modelFiles" type="file" multiple>
+  </div>
+  <div id="fileCount"></div>
+  
+  <input id="token" name="token" type="text" placeholder="API Token">
+
+  <input name="Submit" type="submit">
+</form>
+
+<button id="upload" type="button">Upload</button>
+<button id="clear" type="button">Clear</button>
+
+<br>
+
+<p>
+  Status:
+</p>
+
+<div id="status"></div>
