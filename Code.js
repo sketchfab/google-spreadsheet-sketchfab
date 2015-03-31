@@ -11,11 +11,11 @@ function showUploadSidebar() {
   var style = HtmlService.createHtmlOutputFromFile( 'stylesheet' ),
       script = HtmlService.createHtmlOutputFromFile( 'javascript' ),
       html = HtmlService.createHtmlOutputFromFile( 'upload' )
-	    .setSandboxMode( HtmlService.SandboxMode.IFRAME )
-	    .setTitle( 'Upload' )
-	    .setWidth( 300 )
-	    .append( style.getContent() )
-	    .append( script.getContent() );
+    .setSandboxMode( HtmlService.SandboxMode.IFRAME )
+    .setTitle( 'Upload' )
+    .setWidth( 300 )
+    .append( style.getContent() )
+    .append( script.getContent() );
 
   SpreadsheetApp.getUi()
     .showSidebar( html );
@@ -61,7 +61,7 @@ function populateSheet( modelsArr, rowCount, columnCount ) {
         .build(),
       
       desRule = SpreadsheetApp.newDataValidation()
-        .requireFormulaSatisfied( '=LTE(LEN(C' + row + '), 256)' )
+        .requireFormulaSatisfied( '=LTE(LEN(C' + row + '), 1024)' )
         .setHelpText( 'Model description must be 256 characters or less.' )
         .build(),
 
@@ -98,8 +98,6 @@ function getMetaData() {
     values = range.getValues();
   Logger.log( 'getMetaData ran: ');
   Logger.log( values );
-
-  // Pass metadata back to client
   return values;
 }
 

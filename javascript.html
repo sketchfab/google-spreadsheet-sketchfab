@@ -191,7 +191,7 @@
         modelData.password = '';
       }
 
-      if (modelData.license !== '' ) {
+      if ( modelData.license !== '' ) {
         console.log( 'Converting license slug to uid.' );
         for ( var lic = 0; lic < lics.length; lic++ ) {
           if ( modelData.license === lics[ lic ].slug ) {
@@ -205,14 +205,14 @@
         console.log( 'Converting category slug to uid.' );
         for ( var cat = 0; cat < cats.length; cat ++ ) {
           if ( modelData.category === cats[ cat ].slug ) {
-            modelData.category = [ cats[ cat ].uid ];
+            modelData.category = cats[ cat ].uid;
             break;
           }
         }
       }
       
       modelsPatchArr.push( {
-        'categories': modelData.category
+        'categories': [ modelData.category ]
       });
 
       console.log( 'Metadata validation ' + row + ' of ' + modelCount + ' complete.' );
@@ -315,7 +315,7 @@
               console.log( sketchfabModelUrl + urlid );
               complete = true;
               $( '#model' + ( pollingIndex + 1 ) ).html( '<a target="_blank" href="' + sketchfabModelUrl + urlid + '">' + sketchfabModelUrl + urlid + '</a>' );
-              console.log( 'Preparing to patch category...' );
+              console.log( 'Preparing to patch categories...' );
               patchModel( urlid, pollingIndex );
               break;
 
@@ -359,28 +359,27 @@
   }
 
   function patchModel( urlid, patchingIndex ) {
-    var patchUrl = 'https://api.sketchfab.com/v2/models/' + urlid + '?token=' + token,
-      patchData = modelsPatchArr[ patchingIndex ];
+    var patchUrl = sketchfabApiUrl + '/' + urlid + '?token=' + token,
+      patchData = JSON.stringify( modelsPatchArr[ patchingIndex ] );
 
     if ( patchData.category === '' ) {
       console.log( 'Model ' + ( patchingIndex + 1 ) + ' of ' + modelCount + ' has no category, skipping.' );
     } else {
-      console.log( 'Patching category for model ' + ( patchingIndex + 1 ) + ' of ' + modelCount + '...' );
+      console.log( 'Patching model ' + ( patchingIndex + 1 ) + ' of ' + modelCount + '.' );
       
       $.ajax({
-        headers : {
-          'Content-Type' : 'application/json'
-        },
         url: patchUrl,
         data: patchData,
         type: 'PATCH',
+        contentType: 'application/json',
+        traditional: true,
 
         success: function( response ) {
           console.log( 'Patched.' );
         },
 
         error: function( response ) {
-          console.log( 'Patch Failed!' );
+          console.log( 'Patch Failed' );
         }
       });
     }
