@@ -107,7 +107,7 @@ function clearSheet() {
 }
 
 function getCategories() {
-  var catUrl = 'https://api.sketchfab.com/v2/categories',
+  var catUrl = 'https://api.sketchfab.com/v3/categories',
     catResponse = UrlFetchApp.fetch( catUrl );
   
   return JSON.parse( catResponse.getContentText() ).results;
